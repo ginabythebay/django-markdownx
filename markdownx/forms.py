@@ -47,7 +47,7 @@ class ImageForm(forms.Form):
             )
     }
 
-    def save(self, commit=True):
+    def save(self):
         """
         Saves the uploaded image in the designated location.
 
@@ -57,10 +57,8 @@ class ImageForm(forms.Form):
 
         The dimension of image files (excluding SVG) are set using `PIL`.
 
-        :param commit: If `True`, the file is saved to the disk; otherwise, it is held in the memory.
-        :type commit: bool
-        :return: An instance of saved image if `commit is True`, else `namedtuple(path, image)`.
-        :rtype: bool, namedtuple
+        :return: namedtuple(url, content_type, file_name)`.
+        :rtype: namedtuple
         """
         image = self.files.get('image')
         content_type = image.content_type
@@ -68,7 +66,8 @@ class ImageForm(forms.Form):
         image_extension = content_type.split('/')[-1].upper()
         image_size = getattr(image, '_size')
 
-        if content_type.lower() != self._SVG_TYPE:
+        lower = content_type.lower()
+        if lower != self._SVG_TYPE and lower.startswith('image/'):
             # Processing the raster graphic image:
             image = self._process_raster(image, image_extension)
             image_size = image.tell()
@@ -84,9 +83,9 @@ class ImageForm(forms.Form):
             charset=None
         )
 
-        return self._save(uploaded_image, file_name, commit)
+        return self._save(uploaded_image, file_name)
 
-    def _save(self, image, file_name, commit):
+    def _save(self, image, file_name):
         """
         Final saving process, called internally after the image had processed.
         """
@@ -95,13 +94,11 @@ class ImageForm(forms.Form):
         unique_file_name = self.get_unique_file_name(file_name)
         full_path = path.join(MARKDOWNX_MEDIA_PATH, unique_file_name)
 
-        if commit:
-            default_storage.save(full_path, image)
-            return default_storage.url(full_path)
-
-        # If `commit is False`, return the path and in-memory image.
-        image_data = namedtuple('image_data', ['path', 'image'])
-        return image_data(path=full_path, image=image)
+        default_storage.save(full_path, image)
+        image_data = namedtuple('image_data', ['url', 'content_type', 'file_name'])
+        return image_data(url=default_storage.url(full_path),
+                          content_type=image.content_type,
+                          file_name=file_name)
 
     @staticmethod
     def _process_raster(image, extension):
